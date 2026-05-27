@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>seeyuhS2</title>
+<style>
+  :root {
+    --bg: #000000;
+    --card: #0f0f11;
+    --ink: #f1f1ee;
+    --soft: #8b8b86;
+    --muted: #56564f;
+    --hair: #222225;
+    --gauge-bg: #232327;
+    --accent: #39ff14;
+    --partial: #ffb86c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-feature-settings: "tnum", "ss01";
+    line-height: 1.5;
+    padding: 56px 24px 80px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 36px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--hair);
+  }
+  header h1 {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+  header .updated {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .days { display: flex; flex-direction: column; gap: 14px; }
+  .day {
+    background: var(--card);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+    padding: 18px 22px 22px;
+  }
+  .day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--soft);
+    margin-bottom: 4px;
+  }
+  .day-header .partial {
+    color: var(--partial);
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-size: 11px;
+  }
+  .gauges {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+  }
+  .gauge svg { width: 100%; max-width: 220px; height: auto; display: block; }
+  .gauge-label {
+    font-size: 10.5px;
+    color: var(--muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: -2px;
+  }
+  .arc-bg { stroke: var(--gauge-bg); stroke-width: 10; fill: none; stroke-linecap: round; }
+  .arc-fill {
+    stroke: var(--accent);
+    stroke-width: 10;
+    fill: none;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 3px rgba(57, 255, 20, 0.55)) drop-shadow(0 0 8px rgba(57, 255, 20, 0.25));
+    transition: stroke-dashoffset 1s cubic-bezier(.2,.7,.2,1);
+  }
+  .tick { stroke: var(--muted); stroke-width: 1; opacity: 0.35; }
+  .gauge-pct { font-size: 26px; font-weight: 500; fill: var(--ink); letter-spacing: -0.02em; }
+  .gauge-pct-sign { font-size: 12px; fill: var(--muted); font-weight: 400; }
+  .gauge-raw { font-size: 9.5px; fill: var(--muted); letter-spacing: 0.04em; }
+  .gauge-na { font-size: 22px; fill: var(--muted); font-weight: 300; }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 22px;
+    border-top: 1px solid var(--hair);
+    font-size: 11.5px;
+    color: var(--soft);
+    line-height: 1.7;
+  }
+  footer dl {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 2px 14px;
+    margin-bottom: 18px;
+  }
+  footer dt {
+    color: var(--ink);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    align-self: center;
+  }
+  footer dd { color: var(--soft); }
+  footer .credit {
+    color: var(--muted);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 420px) {
+    .gauges { grid-template-columns: 1fr; gap: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>seeyuhS2</h1>
+  <div class="updated" id="updated"></div>
+</header>
+
+<div class="days" id="days"></div>
+
+<footer>
+  <dl>
+    <dt>Mobilization</dt><dd>work hours / awake hours</dd>
+    <dt>Efficiency</dt><dd>score-weighted work hours / work hours</dd>
+  </dl>
+  <div class="credit">created by Opus 4.7</div>
+</footer>
+
+<script src="data.js"></script>
+<script>
+  const ARC_RADIUS = 80;
+  const ARC_LEN = Math.PI * ARC_RADIUS;
+  const ARC_PATH = `M 20 110 A ${ARC_RADIUS} ${ARC_RADIUS} 0 0 1 180 110`;
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function fmtDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return `${DAY_NAMES[dt.getDay()]} ${m}/${d}`;
+  }
+
+  function fmtHr(h) {
+    if (h == null) return '—';
+    const s = h.toFixed(1);
+    return s.endsWith('.0') ? s.slice(0, -2) : s;
+  }
+
+  function tickAt(pct) {
+    // angle: 180° at pct=0, 0° at pct=1
+    const angle = Math.PI * (1 - pct);
+    const cx = 100, cy = 110, r1 = ARC_RADIUS - 9, r2 = ARC_RADIUS + 9;
+    const x1 = cx + r1 * Math.cos(angle);
+    const y1 = cy - r1 * Math.sin(angle);
+    const x2 = cx + r2 * Math.cos(angle);
+    const y2 = cy - r2 * Math.sin(angle);
+    return `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" class="tick"/>`;
+  }
+
+  function gaugeSVG(value, rawLine) {
+    const has = value != null;
+    const pct = has ? Math.max(0, Math.min(1, value)) : 0;
+    const dashoffsetFinal = ARC_LEN * (1 - pct);
+
+    const centerText = has
+      ? `<text x="100" y="86" text-anchor="middle" class="gauge-pct">${Math.round(pct * 100)}<tspan class="gauge-pct-sign" dx="1">%</tspan></text>`
+      : `<text x="100" y="92" text-anchor="middle" class="gauge-na">—</text>`;
+
+    const rawText = rawLine
+      ? `<text x="100" y="105" text-anchor="middle" class="gauge-raw">${rawLine}</text>`
+      : '';
+
+    return `
+      <svg viewBox="0 0 200 120" aria-hidden="true">
+        <path d="${ARC_PATH}" class="arc-bg"/>
+        ${tickAt(0.5)}
+        <path d="${ARC_PATH}" class="arc-fill"
+          stroke-dasharray="${ARC_LEN.toFixed(2)}"
+          stroke-dashoffset="${ARC_LEN.toFixed(2)}"
+          data-target="${dashoffsetFinal.toFixed(2)}"/>
+        ${centerText}
+        ${rawText}
+      </svg>`;
+  }
+
+  function render(data) {
+    document.getElementById('updated').textContent = 'updated ' + data.last_updated;
+
+    const container = document.getElementById('days');
+    for (const day of data.days) {
+      const card = document.createElement('div');
+      card.className = 'day';
+      const partial = day.partial ? '<span class="partial">in progress</span>' : '<span></span>';
+
+      const mobRaw = (day.work_hrs != null && day.awake_hrs != null)
+        ? `${fmtHr(day.work_hrs)} / ${fmtHr(day.awake_hrs)} hr`
+        : '';
+
+      card.innerHTML = `
+        <div class="day-header">
+          <span>${fmtDate(day.date)}</span>
+          ${partial}
+        </div>
+        <div class="gauges">
+          <div class="gauge">
+            ${gaugeSVG(day.mobilization, mobRaw)}
+            <div class="gauge-label">Mobilization</div>
+          </div>
+          <div class="gauge">
+            ${gaugeSVG(day.efficiency, null)}
+            <div class="gauge-label">Efficiency</div>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    }
+
+    // Animate fills in next frame
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.arc-fill').forEach(el => {
+        el.style.strokeDashoffset = el.dataset.target;
+      });
+    });
+  }
+
+  if (window.DASHBOARD_DATA) {
+    render(window.DASHBOARD_DATA);
+  } else {
+    document.getElementById('days').innerHTML =
+      '<p style="color:var(--muted);font-size:13px;">No data loaded. Run <code>bash site/refresh.sh</code>.</p>';
+  }
+</script>
+
+</body>
+</html>
