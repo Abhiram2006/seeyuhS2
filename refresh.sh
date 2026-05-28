@@ -47,3 +47,13 @@ set outputText to outputLines as text
 set AppleScript's text item delimiters to ""
 return outputText
 APPLESCRIPT
+
+GIST_ID="95dbfa27f404d923bb270929d7bf72a8"
+echo ""
+echo "Publishing to gist $GIST_ID ..."
+python3 -c "
+import json, sys
+content = open('$SITE_DIR/data.json').read()
+json.dump({'files': {'data.json': {'content': content}}}, sys.stdout)
+" | gh api -X PATCH "/gists/$GIST_ID" --input - >/dev/null
+echo "Live: https://abhiram2006.github.io/seeyuhS2/"
