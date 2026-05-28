@@ -218,6 +218,7 @@
     document.getElementById('updated').textContent = 'updated ' + data.last_updated;
 
     const container = document.getElementById('days');
+    container.innerHTML = '';
     for (const day of data.days) {
       const card = document.createElement('div');
       card.className = 'day';
@@ -276,12 +277,27 @@
     return await resp.json();
   }
 
-  loadData()
-    .then(render)
-    .catch(err => {
-      document.getElementById('days').innerHTML =
-        '<p style="color:var(--muted);font-size:13px;">Couldn\'t load data: ' + err.message + '</p>';
-    });
+  let lastSnapshot = '';
+  async function refreshUI() {
+    try {
+      const data = await loadData();
+      const snap = JSON.stringify(data);
+      if (snap === lastSnapshot) return;
+      lastSnapshot = snap;
+      render(data);
+    } catch (err) {
+      if (!lastSnapshot) {
+        document.getElementById('days').innerHTML =
+          '<p style="color:var(--muted);font-size:13px;">Couldn\'t load data: ' + err.message + '</p>';
+      }
+    }
+  }
+
+  refreshUI();
+  setInterval(refreshUI, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshUI();
+  });
 </script>
 
 </body>
