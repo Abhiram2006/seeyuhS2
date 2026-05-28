@@ -2,8 +2,16 @@
 set -euo pipefail
 
 SITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GIST_ID="95dbfa27f404d923bb270929d7bf72a8"
 
-osascript <<'APPLESCRIPT' | python3 "$SITE_DIR/build_data.py" "$SITE_DIR"
+EVENTS_TMP=$(mktemp)
+ERR_TMP=$(mktemp)
+trap 'rm -f "$EVENTS_TMP" "$ERR_TMP"' EXIT
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Pulling Evidence. calendar via osascript ..."
+
+set +e
+osascript >"$EVENTS_TMP" 2>"$ERR_TMP" <<'APPLESCRIPT'
 on fmt(d)
     set y to year of d as integer
     set m to (month of d) as integer
@@ -47,13 +55,31 @@ set outputText to outputLines as text
 set AppleScript's text item delimiters to ""
 return outputText
 APPLESCRIPT
+OSA_EXIT=$?
+set -e
 
-GIST_ID="95dbfa27f404d923bb270929d7bf72a8"
-echo ""
+# Guard: bail before touching local data.json or gist if osascript failed.
+if [ "$OSA_EXIT" -ne 0 ]; then
+  echo "ERROR: osascript exited $OSA_EXIT — aborting (local data + gist untouched)."
+  echo "stderr:"; cat "$ERR_TMP"
+  exit 1
+fi
+if [ ! -s "$EVENTS_TMP" ]; then
+  echo "ERROR: osascript produced no output — aborting (likely TCC denied; local data + gist untouched)."
+  echo "stderr:"; cat "$ERR_TMP"
+  exit 1
+fi
+
+EVENT_COUNT=$(wc -l < "$EVENTS_TMP" | tr -d ' ')
+echo "Got $EVENT_COUNT events. Building data.json ..."
+
+python3 "$SITE_DIR/build_data.py" "$SITE_DIR" < "$EVENTS_TMP"
+
 echo "Publishing to gist $GIST_ID ..."
 python3 -c "
 import json, sys
 content = open('$SITE_DIR/data.json').read()
 json.dump({'files': {'data.json': {'content': content}}}, sys.stdout)
 " | gh api -X PATCH "/gists/$GIST_ID" --input - >/dev/null
-echo "Live: https://abhiram2006.github.io/seeyuhS2/"
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Done. Live: https://abhiram2006.github.io/seeyuhS2/"
